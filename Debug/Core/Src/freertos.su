@@ -1,0 +1,2 @@
+RTOS_timer.h:11:13:MX_TIM7_Init	16	static
+freertos.c:63:6:vApplicationGetIdleTaskMemory	24	static
