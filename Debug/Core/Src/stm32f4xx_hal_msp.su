@@ -1,3 +1,9 @@
+main.h:81:13:MX_I2C1_Init	8	static
+main.h:115:13:MX_TIM1_Init	96	static
+main.h:202:13:MX_TIM4_Init	32	static
+main.h:253:13:MX_USART1_UART_Init	8	static
+main.h:286:13:MX_USART3_UART_Init	8	static
+main.h:319:13:MX_GPIO_Init	48	static
 stm32f4xx_hal_msp.c:66:6:HAL_MspInit	16	static
 stm32f4xx_hal_msp.c:90:6:HAL_I2C_MspInit	48	static
 stm32f4xx_hal_msp.c:126:6:HAL_I2C_MspDeInit	16	static

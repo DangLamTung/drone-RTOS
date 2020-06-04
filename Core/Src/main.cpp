@@ -40,6 +40,11 @@
 #include "MadgwickAHRS.h"
 #include "print_func.hpp"
 #include "EKF.h"
+#include "mpu_data_type.hpp"
+#include "bmp180.h"
+#include "flash.h"
+#include "PID.h"
+
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -59,67 +64,57 @@
 /* Private variables ---------------------------------------------------------*/
 
 
-TIM_HandleTypeDef htim1;
-TIM_HandleTypeDef htim4;
-
-
-UART_HandleTypeDef huart1;
-
-
 osThreadId read_MPUHandle;
 osThreadId read_BMPHandle;
+osThreadId read_MagnetHandle;
 osThreadId receiveTaskHandle;
 osThreadId filterTaskHandle;
 osMessageQId QueueHandle;
 /* USER CODE BEGIN PV */
 uint8_t Rx_data[2];
-uint8_t Rx_buffer[6];
-uint16_t esc_value[4];
+uint8_t Rx_buffer[24];
+uint8_t sbus_buffer[7];
+bool reading;
+
 int start, end, t_sample, i;
+int j;
+
+double alt;
+
 IMU_data data_imu_raw;
 IMU_data data_imu_buffer;
+IMU_data data_imu_com;
+MAG_data mag_data;
+
 EULER_angle drone_state;
-EKF ekf = EKF(x,P,Q,R);
+EULER_angle magd_state;
+EULER_angle com_state;
 
-void init_ESC(){
-	  HAL_TIM_Base_Start(&htim4);
-	  HAL_TIM_PWM_Start(&htim1,TIM_CHANNEL_1);
-	    HAL_TIM_PWM_Start(&htim1,TIM_CHANNEL_2);
-	    HAL_TIM_PWM_Start(&htim1,TIM_CHANNEL_3);
-	    HAL_TIM_PWM_Start(&htim1,TIM_CHANNEL_4);
-	    __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1, 1000);
-	    __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_2, 1000);
-	    __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_3, 1000);
-	    __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_4, 1000);
-	    esc_value1 = 1000;
-	    esc_value2 = 1000;
-	    esc_value3 = 1000;
-	    esc_value4 = 1000;
+ESC_value esc_value;
+ESC_value esc_stop;
 
-	    HAL_Delay(3000);
-}
+LPF gyro_lpf;
+LPF gyro_lpf1;
+LPF gyro_lpf2;
 
-void set_ESC(){
-	    __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1,esc_value1);
-	    __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_2, esc_value2);
-	    __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_3,esc_value3);
-	    __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_4,esc_value4);
-}
+LPF acc_lpf;
+LPF acc_lpf1;
+LPF acc_lpf2;
+
+PID_raw pid_temp;
+PID_value pid;
+EKF ekf;
+
+double x[7] = {1,0,0,0,0,0,0};
 
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
-static void MX_GPIO_Init(void);
-static void MX_USART3_UART_Init(void);
-static void MX_I2C1_Init(void);
-static void MX_TIM1_Init(void);
-static void MX_USART1_UART_Init(void);
-static void MX_TIM4_Init(void);
-static void MX_TIM7_Init(void);
 void StartDefaultTask(void const * argument);
 void StartTask02(void const * argument);
 void StartTask03(void const * argument);
+void readMagnet(void const * argument);
 void filterFunction(void const * argument);
 
 /* USER CODE BEGIN PFP */
@@ -146,6 +141,7 @@ int main(void)
   /* MCU Configuration--------------------------------------------------------*/
 
   /* Reset of all peripherals, Initializes the Flash interface and the Systick. */
+
   HAL_Init();
 
   /* USER CODE BEGIN Init */
@@ -171,11 +167,37 @@ int main(void)
 
   HAL_UART_Receive_IT(&huart3, (uint8_t *) Rx_data, 1);
   HAL_UART_Receive_IT(&huart1, (uint8_t *) Rx_data, 1);
+
+  check_AHRS(true);
+
+  esc_stop.esc_value1 = 1000;
+  esc_stop.esc_value2 = 1000;
+  esc_stop.esc_value3 = 1000;
+  esc_stop.esc_value4 = 1000;
+
   init_MPU();
   init_ESC();
-  MX_TIM7_Init();
-  ekf.loadEKF(x,P,Q,R);
-//  calibration_IMU();
+  initBMP();
+
+  pid = readFlash();
+//  MX_TIM7_Init();
+  BOARD_MODE = FLY_MODE;
+
+//  data_lpf.load(LPF_10HZ);
+
+  gyro_lpf.load(LPF_50HZ);
+  gyro_lpf1.load(LPF_50HZ);
+  gyro_lpf2.load(LPF_50HZ);
+
+  acc_lpf.load(LPF_50HZ);
+  acc_lpf1.load(LPF_50HZ);
+  acc_lpf2.load(LPF_10HZ_fs100_chev2);
+
+  calibration_IMU();
+  x[4] = bGx*DEC2RAD;
+  x[5] = bGy*DEC2RAD;
+  x[6] = bGz*DEC2RAD;
+  ekf.loadEKF(x,P,Q,R_full);
 
 //  initBMP();
 
@@ -214,12 +236,16 @@ int main(void)
   osThreadDef(read_BMP, StartTask02, osPriorityNormal, 0, 128);
   read_BMPHandle = osThreadCreate(osThread(read_BMP), NULL);
 
+  /* definition and creation of read_magnet */
+//  osThreadDef(read_Magnet, readMagnet, osPriorityNormal, 0, 128);
+//  read_MagnetHandle = osThreadCreate(osThread(read_Magnet), NULL);
+
   /* definition and creation of receiveTask */
-  osThreadDef(receiveTask, StartTask03, osPriorityHigh, 0, 128);
+  osThreadDef(receiveTask, StartTask03, osPriorityHigh, 0, 512);
   receiveTaskHandle = osThreadCreate(osThread(receiveTask), NULL);
 
   /* definition and creation of filterTask */
-  osThreadDef(filterTask, filterFunction, osPriorityAboveNormal, 0, 6000);
+  osThreadDef(filterTask, filterFunction, osPriorityAboveNormal , 0, 10000);
   filterTaskHandle = osThreadCreate(osThread(filterTask), NULL);
 
   /* USER CODE BEGIN RTOS_THREADS */
@@ -267,7 +293,7 @@ void SystemClock_Config(void)
   RCC_OscInitStruct.PLL.PLLQ = 4;
   if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
   {
-    Error_Handler();
+
   }
   /** Initializes the CPU, AHB and APB busses clocks
   */
@@ -280,346 +306,13 @@ void SystemClock_Config(void)
 
   if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_5) != HAL_OK)
   {
-    Error_Handler();
+
   }
 }
 
-/**
-  * @brief I2C1 Initialization Function
-  * @param None
-  * @retval None
-  */
-static void MX_I2C1_Init(void)
-{
-
-  /* USER CODE BEGIN I2C1_Init 0 */
-
-  /* USER CODE END I2C1_Init 0 */
-
-  /* USER CODE BEGIN I2C1_Init 1 */
-
-  /* USER CODE END I2C1_Init 1 */
-  hi2c1.Instance = I2C1;
-  hi2c1.Init.ClockSpeed = 400000;
-  hi2c1.Init.DutyCycle = I2C_DUTYCYCLE_2;
-  hi2c1.Init.OwnAddress1 = 0;
-  hi2c1.Init.AddressingMode = I2C_ADDRESSINGMODE_7BIT;
-  hi2c1.Init.DualAddressMode = I2C_DUALADDRESS_DISABLE;
-  hi2c1.Init.OwnAddress2 = 0;
-  hi2c1.Init.GeneralCallMode = I2C_GENERALCALL_DISABLE;
-  hi2c1.Init.NoStretchMode = I2C_NOSTRETCH_DISABLE;
-  if (HAL_I2C_Init(&hi2c1) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  /* USER CODE BEGIN I2C1_Init 2 */
-
-  /* USER CODE END I2C1_Init 2 */
-
-}
-
-/**
-  * @brief TIM1 Initialization Function
-  * @param None
-  * @retval None
-  */
-static void MX_TIM1_Init(void)
-{
-
-  /* USER CODE BEGIN TIM1_Init 0 */
-
-  /* USER CODE END TIM1_Init 0 */
-
-  TIM_ClockConfigTypeDef sClockSourceConfig = {0};
-  TIM_MasterConfigTypeDef sMasterConfig = {0};
-  TIM_OC_InitTypeDef sConfigOC = {0};
-  TIM_BreakDeadTimeConfigTypeDef sBreakDeadTimeConfig = {0};
-
-  /* USER CODE BEGIN TIM1_Init 1 */
-
-  /* USER CODE END TIM1_Init 1 */
-  htim1.Instance = TIM1;
-  htim1.Init.Prescaler = 167;
-  htim1.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim1.Init.Period = 2000;
-  htim1.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
-  htim1.Init.RepetitionCounter = 0;
-  htim1.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
-  if (HAL_TIM_Base_Init(&htim1) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
-  if (HAL_TIM_ConfigClockSource(&htim1, &sClockSourceConfig) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  if (HAL_TIM_PWM_Init(&htim1) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
-  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
-  if (HAL_TIMEx_MasterConfigSynchronization(&htim1, &sMasterConfig) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  sConfigOC.OCMode = TIM_OCMODE_PWM1;
-  sConfigOC.Pulse = 0;
-  sConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH;
-  sConfigOC.OCNPolarity = TIM_OCNPOLARITY_HIGH;
-  sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;
-  sConfigOC.OCIdleState = TIM_OCIDLESTATE_RESET;
-  sConfigOC.OCNIdleState = TIM_OCNIDLESTATE_RESET;
-  if (HAL_TIM_PWM_ConfigChannel(&htim1, &sConfigOC, TIM_CHANNEL_1) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  if (HAL_TIM_PWM_ConfigChannel(&htim1, &sConfigOC, TIM_CHANNEL_2) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  if (HAL_TIM_PWM_ConfigChannel(&htim1, &sConfigOC, TIM_CHANNEL_3) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  if (HAL_TIM_PWM_ConfigChannel(&htim1, &sConfigOC, TIM_CHANNEL_4) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  sBreakDeadTimeConfig.OffStateRunMode = TIM_OSSR_DISABLE;
-  sBreakDeadTimeConfig.OffStateIDLEMode = TIM_OSSI_DISABLE;
-  sBreakDeadTimeConfig.LockLevel = TIM_LOCKLEVEL_OFF;
-  sBreakDeadTimeConfig.DeadTime = 0;
-  sBreakDeadTimeConfig.BreakState = TIM_BREAK_DISABLE;
-  sBreakDeadTimeConfig.BreakPolarity = TIM_BREAKPOLARITY_HIGH;
-  sBreakDeadTimeConfig.AutomaticOutput = TIM_AUTOMATICOUTPUT_DISABLE;
-  if (HAL_TIMEx_ConfigBreakDeadTime(&htim1, &sBreakDeadTimeConfig) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  /* USER CODE BEGIN TIM1_Init 2 */
-
-  /* USER CODE END TIM1_Init 2 */
-  HAL_TIM_MspPostInit(&htim1);
-
-}
-
-/**
-  * @brief TIM4 Initialization Function
-  * @param None
-  * @retval None
-  */
-static void MX_TIM4_Init(void)
-{
-
-  /* USER CODE BEGIN TIM4_Init 0 */
-
-  /* USER CODE END TIM4_Init 0 */
-
-  TIM_ClockConfigTypeDef sClockSourceConfig = {0};
-  TIM_MasterConfigTypeDef sMasterConfig = {0};
-
-  /* USER CODE BEGIN TIM4_Init 1 */
-
-  /* USER CODE END TIM4_Init 1 */
-  htim4.Instance = TIM4;
-  htim4.Init.Prescaler = 167;
-  htim4.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim4.Init.Period = 2000;
-  htim4.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
-  htim4.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
-  if (HAL_TIM_Base_Init(&htim4) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
-  if (HAL_TIM_ConfigClockSource(&htim4, &sClockSourceConfig) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
-  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
-  if (HAL_TIMEx_MasterConfigSynchronization(&htim4, &sMasterConfig) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  /* USER CODE BEGIN TIM4_Init 2 */
-
-  /* USER CODE END TIM4_Init 2 */
-
-}
-
-/**
-  * @brief TIM7 Initialization Function
-  * @param None
-  * @retval None
-  */
-
-/**
-  * @brief USART1 Initialization Function
-  * @param None
-  * @retval None
-  */
-static void MX_USART1_UART_Init(void)
-{
-
-  /* USER CODE BEGIN USART1_Init 0 */
-
-  /* USER CODE END USART1_Init 0 */
-
-  /* USER CODE BEGIN USART1_Init 1 */
-
-  /* USER CODE END USART1_Init 1 */
-  huart1.Instance = USART1;
-  huart1.Init.BaudRate = 115200;
-  huart1.Init.WordLength = UART_WORDLENGTH_8B;
-  huart1.Init.StopBits = UART_STOPBITS_1;
-  huart1.Init.Parity = UART_PARITY_NONE;
-  huart1.Init.Mode = UART_MODE_TX_RX;
-  huart1.Init.HwFlowCtl = UART_HWCONTROL_NONE;
-  huart1.Init.OverSampling = UART_OVERSAMPLING_16;
-  if (HAL_UART_Init(&huart1) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  /* USER CODE BEGIN USART1_Init 2 */
-
-  /* USER CODE END USART1_Init 2 */
-
-}
-
-/**
-  * @brief USART3 Initialization Function
-  * @param None
-  * @retval None
-  */
-static void MX_USART3_UART_Init(void)
-{
-
-  /* USER CODE BEGIN USART3_Init 0 */
-
-  /* USER CODE END USART3_Init 0 */
-
-  /* USER CODE BEGIN USART3_Init 1 */
-
-  /* USER CODE END USART3_Init 1 */
-  huart3.Instance = USART3;
-  huart3.Init.BaudRate = 115200;
-  huart3.Init.WordLength = UART_WORDLENGTH_8B;
-  huart3.Init.StopBits = UART_STOPBITS_1;
-  huart3.Init.Parity = UART_PARITY_NONE;
-  huart3.Init.Mode = UART_MODE_TX_RX;
-  huart3.Init.HwFlowCtl = UART_HWCONTROL_NONE;
-  huart3.Init.OverSampling = UART_OVERSAMPLING_16;
-  if (HAL_UART_Init(&huart3) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  /* USER CODE BEGIN USART3_Init 2 */
-
-  /* USER CODE END USART3_Init 2 */
-
-}
-
-/**
-  * @brief GPIO Initialization Function
-  * @param None
-  * @retval None
-  */
-static void MX_GPIO_Init(void)
-{
-  GPIO_InitTypeDef GPIO_InitStruct = {0};
-
-  /* GPIO Ports Clock Enable */
-  __HAL_RCC_GPIOH_CLK_ENABLE();
-  __HAL_RCC_GPIOA_CLK_ENABLE();
-  __HAL_RCC_GPIOC_CLK_ENABLE();
-  __HAL_RCC_GPIOB_CLK_ENABLE();
-
-  /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, GPIO_PIN_RESET);
-
-  /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOC, GPIO_PIN_4|GPIO_PIN_5, GPIO_PIN_RESET);
-
-  /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_2|GPIO_PIN_12|GPIO_PIN_13, GPIO_PIN_RESET);
-
-  /*Configure GPIO pin : PA4 */
-  GPIO_InitStruct.Pin = GPIO_PIN_4;
-  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
-
-  /*Configure GPIO pins : PC4 PC5 */
-  GPIO_InitStruct.Pin = GPIO_PIN_4|GPIO_PIN_5;
-  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
-
-  /*Configure GPIO pins : PB2 PB12 PB13 */
-  GPIO_InitStruct.Pin = GPIO_PIN_2|GPIO_PIN_12|GPIO_PIN_13;
-  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
-
-}
 
 /* USER CODE BEGIN 4 */
-void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
-{
-	HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_12);
-	if (huart->Instance == USART3)  //current UART
-	{
-		if(Rx_data[0] == 's'){
-			i = 0;
-             for(int count =0; count< 6; count++)
-            	 Rx_buffer[count] = 0x00;
-		}
-		else{
-			if(Rx_data[0] != 'e'){
-			 Rx_buffer[i] = Rx_data[0];
-			 i++;
-//			 HAL_UART_Receive_IT(&huart3, (uint8_t *) Rx_data, 1);
 
-			}
-			else{
-				sbus_decode(Rx_buffer);
-                Rx_data[0] = 0;
-//				HAL_UART_Receive_IT(&huart3, (uint8_t *) Rx_data, 1);
-			}
-		}
-	}
-	if (huart->Instance == USART1)  //current UART
-	{
-		if(Rx_data[0] == 's'){
-			i = 0;
-             for(int count =0; count< 6; count++)
-            	 Rx_buffer[count] = 0x00;
-		}
-		else{
-			if(Rx_data[0] != 'e'){
-			 Rx_buffer[i] = Rx_data[0];
-			 i++;
-//			 HAL_UART_Receive_IT(&huart3, (uint8_t *) Rx_data, 1);
-
-			}
-			else{
-				sbus_decode(Rx_buffer);
-				set_ESC();
-                Rx_data[0] = 0;
-
-//				HAL_UART_Receive_IT(&huart3, (uint8_t *) Rx_data, 1);
-			}
-		}
-	}
-	 HAL_UART_Receive_IT(&huart1, (uint8_t *) Rx_data, 1);
-	 HAL_UART_Receive_IT(&huart3, (uint8_t *) Rx_data, 1);
-}
 /* USER CODE END 4 */
 
 /* USER CODE BEGIN Header_StartDefaultTask */
@@ -638,16 +331,11 @@ void StartDefaultTask(void const * argument)
 
 //    data = osMailAlloc(QueueHandle, osWaitForever); /* Allocate memory */
 
-   data_imu_raw = process_MPU();
-   adding_raw();
-   i++;
+    data_imu_raw = process_MPU(true,false);
 
-
-//    if (osMailPut(QueueHandle, data) != osOK) /* Send Mail */
-//        {
-//          osDelay(50);
-//        }
-    osDelay(2);
+    adding_raw();
+    i++;
+    osDelay(1);
   }
   /* USER CODE END 5 */
 }
@@ -659,15 +347,19 @@ void StartDefaultTask(void const * argument)
 * @retval None
 */
 /* USER CODE END Header_StartTask02 */
-void StartTask02(void const * argument)
+void StartTask03(void const * argument)
 {
   /* USER CODE BEGIN StartTask02 */
   /* Infinite loop */
   for(;;)
   {
-//	  print_every_thing(data_imu_buffer,drone_state);
-////	  print_raw(data_imu_buffer);
-	  osDelay(33);
+//	  advance_print(data_imu_buffer);
+//	  print_euler_compare(com_state,magd_state,drone_state);
+//	  print_magnet(mag_data);
+	  print_raw(data_imu_buffer);
+//	  print_raw_mag(data_imu_buffer, mag_data);
+//	  print_euler(drone_state);
+	  osDelay(50);
 
   }
   /* USER CODE END StartTask02 */
@@ -680,19 +372,33 @@ void StartTask02(void const * argument)
 * @retval None
 */
 /* USER CODE END Header_StartTask03 */
-void StartTask03(void const * argument)
+void StartTask02(void const * argument)
 {
   /* USER CODE BEGIN StartTask03 */
   /* Infinite loop */
   for(;;)
   {
 //	i = 0;
-//	process_magnet();
-    osDelay(1000);
+	  mag_data = process_magnet();
+//	alt =  get_alt_bmp();
+
+    osDelay(10);
   }
   /* USER CODE END StartTask03 */
 }
 
+void readMagnet(void const * argument)
+{
+  /* USER CODE BEGIN StartTask03 */
+  /* Infinite loop */
+  for(;;)
+  {
+//	process_magnet();
+//	alt =  get_alt_bmp();
+//    osDelay(100);
+  }
+  /* USER CODE END StartTask03 */
+}
 /* USER CODE BEGIN Header_filterFunction */
 /**
 * @brief Function implementing the filterTask thread.
@@ -706,25 +412,44 @@ void filterFunction(void const * argument)
   /* Infinite loop */
   for(;;)
   {
-	  data_imu_buffer.Gyro_x = (float) Gyro_x_/i;
-	  data_imu_buffer.Gyro_y = (float) Gyro_y_/i;
-	  data_imu_buffer.Gyro_z = (float) Gyro_z_/i;
 
-	  gyro_angle_r += data_imu_buffer.Gyro_x*0.01;
-	  gyro_angle_p += data_imu_buffer.Gyro_y*0.01;
-	  gyro_angle_y += data_imu_buffer.Gyro_z*0.01;
+	  if(i!=0){
 
-	  data_imu_buffer.Acc_x =  (float) Acc_x_/i;
-	  data_imu_buffer.Acc_y =  (float) Acc_y_/i;
-	  data_imu_buffer.Acc_z =  (float) Acc_z_/i;
-//
-	  ekf.updateEKF(data_imu_buffer, 0.01);
-//	  drone_state = MadgwickAHRSupdateIMU(data_imu_buffer,0.01);
-//	  i = 0;
+	  data_imu_buffer.Gyro_x = gyro_lpf.update(Gyro_x_/i);
+	  data_imu_buffer.Gyro_y = gyro_lpf1.update(Gyro_y_/i);
+	  data_imu_buffer.Gyro_z = gyro_lpf2.update(Gyro_z_/i);
+
+	  data_imu_com.Gyro_x = (data_imu_buffer.Gyro_x - bGx);
+	  data_imu_com.Gyro_y = (data_imu_buffer.Gyro_y - bGy);
+	  data_imu_com.Gyro_z = (data_imu_buffer.Gyro_z - bGz);
+
+
+	  data_imu_buffer.Acc_x =  acc_lpf.update(Acc_x_/i);
+	  data_imu_buffer.Acc_y =  acc_lpf1.update(Acc_y_/i);
+	  data_imu_buffer.Acc_z =  acc_lpf2.update(Acc_z_/i);
+
+
+	  data_imu_com.Acc_x =  (float) Acc_x_/i;
+	  data_imu_com.Acc_y =  (float) Acc_y_/i;
+	  data_imu_com.Acc_z =  (float) Acc_z_/i;
+
+////
+//	  ekf.updateEKF(data_imu_buffer,mag_data, 0.01);
+
+//	  data_imu_buffer.Acc_x =  gyro_angle_r;
+//	  data_imu_buffer.Acc_y =  gyro_angle_p;
+//	  data_imu_buffer.Acc_z =  gyro_angle_y;
+//	  drone_state = ekf.getAngle();
+//	  print_raw(data_imu_buffer);
+	  }
+	  com_state = MadgwickAHRSupdateIMU(data_imu_com,0.01);
+//	  com_state = complementary_filter(data_imu_com, 0.01, 0.995);
+//	  com_state = cross2plus(com_state);
+	  i = 0;
 ////	  drone_state.pitch = gyro_angle_p;
 ////	  drone_state.roll = gyro_angle_r;
 ////	  drone_state.yaw = gyro_angle_y;
-//	  delete_raw();
+	  delete_raw();
       osDelay(10);
   }
   /* USER CODE END filterFunction */
@@ -753,17 +478,68 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
   /* USER CODE END Callback 1 */
 }
 
+void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
+{
+	HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_13);
+
+	if (huart->Instance == USART1)  //current UART
+	{
+
+//		char trans_b[4];
+		if(Rx_data[0] == 's'){
+			j = 0;
+//			BOARD_MODE = FLY_MODE;
+//			reading = true;
+             for(int count = 0; count< 24; count++)
+            	 Rx_buffer[count] = 0x00;
+		}
+		else{
+			if(Rx_data[0] != 'e'){
+			 Rx_buffer[j] = Rx_data[0];
+			 j++;
+//			 HAL_UART_Receive_IT(&huart3, (uint8_t *) Rx_data, 1);
+
+			}
+			else{
+				if(Rx_buffer[8] == 0x00){
+					for(uint8_t k = 0; k<8; k++){
+                        sbus_buffer[k] = Rx_buffer[k];
+					}
+				esc_value = sbus_decode(sbus_buffer);
+				if(check_CRC(esc_value)){
+				    set_ESC(esc_value);
+				    j = 0;
+//				   	HAL_UART_Transmit(&huart1,(uint8_t*) ack, strlen(ack),100);
+				}
+				else{
+					 j = 0;
+				}
+				}
+				else{
+					 pid_temp = pid_decode(Rx_buffer);
+					 if(check_CRC_pid(pid_temp)){
+						 writeFlash(pid_temp.data);
+						 pid = readFlash();
+					 }
+				}
+                Rx_data[0] = 0;
+
+//				HAL_UART_Receive_IT(&huart3, (uint8_t *) Rx_data, 1);
+			}
+		}
+
+		if(Rx_data[0] == 'd'){
+			set_ESC(esc_stop);
+		}
+	}
+	 HAL_UART_Receive_IT(&huart1, (uint8_t *) Rx_data, 1);
+//	 HAL_UART_Receive_IT(&huart3, (uint8_t *) Rx_data, 1);
+}
 /**
   * @brief  This function is executed in case of error occurrence.
   * @retval None
   */
-void Error_Handler(void)
-{
-  /* USER CODE BEGIN Error_Handler_Debug */
-  /* User can add his own implementation to report the HAL error return state */
 
-  /* USER CODE END Error_Handler_Debug */
-}
 
 #ifdef  USE_FULL_ASSERT
 /**

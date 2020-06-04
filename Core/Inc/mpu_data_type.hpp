@@ -13,31 +13,28 @@
 #include <stdio.h>
 #include <string.h>
 
-I2C_HandleTypeDef hi2c1;
-UART_HandleTypeDef huart3;
-
 #define DEC2RAD 0.01745329251
-double x[7] = {1 , 0,0,0,-0.2639,-0.2873,-0.2661};
+
 double Q[49]= {  0,0,0,0,0,0,0,
         0,0,0,0,0,0, 0,
          0,0,0,0,0,0,0,
           0,0,0,0,0,0,0,
-		  0,0, 0 ,0 ,1e-7 ,0, 0,
-          0,0,0,0,0,1e-7,0,
-          0,0,0,0,0,0, 1e-7 };
-double P[49]= {100, 0, 0, 0, 0, 0, 0,
-	       0,100,0, 0, 0, 0, 0,
-	       0, 0,100,0, 0, 0, 0,
-	       0, 0, 0,100,0, 0, 0,
-	       0, 0, 0, 0,100,0, 0,
-	       0, 0, 0, 0, 0,100,0,
-	       0, 0, 0, 0, 0, 0,100};
-double R_full[36]= {  9.99e-06,0,0,0,0,0,
-                     0,9.99e-06,0,0,0,0,
-                     0,0,9.99e-06,0,0,0,
-                     0,0,0,2e-6,0,0,
-                     0,0,0,0,2e-6,0,
-                     0,0,0,0,0,2e-6};
+		  0,0, 0 ,0 ,0.001 ,0, 0,
+          0,0,0,0,0,0.001,0,
+          0,0,0,0,0,0,0.001};
+double P[49]= {1, 0, 0, 0, 0, 0, 0,
+	          0,1,0, 0, 0, 0, 0,
+	          0, 0,1,0, 0, 0, 0,
+	          0, 0, 0,1,0, 0, 0,
+	          0, 0, 0, 0,1,0, 0,
+	          0, 0, 0, 0, 0,1,0,
+	          0, 0, 0, 0, 0, 0,1};
+double R_full[36]= {0.0001, 0, 0, 0, 0, 0,
+					0, 0.0001, 0, 0, 0, 0,
+					0, 0, 0.0001, 0, 0, 0,
+					0, 0, 0, 0.0001, 0, 0,
+					0, 0, 0, 0, 0.0001, 0,
+					0, 0, 0, 0, 0, 0.0001};
 double R[9]= {   7.6941e-07,0,0,
                      0,2.0176e-07,0,
                      0,0,1.5981e-07
@@ -156,6 +153,7 @@ typedef struct
 	float Acc_x;
 	float Acc_y;
 	float Acc_z;
+
 } IMU_data;
 
 typedef struct
@@ -176,12 +174,28 @@ typedef struct
 
 typedef struct
 {
-	float a;
-	float b;
-	float c;
-	float d;
+	float q0;
+	float q1;
+	float q2;
+	float q3;
 } quaternion;
 
+typedef struct
+{
+	bool IMU = true;
+	bool magnet = true;
+	bool baro = true;
+} AHRS_con;
+
+float invSqrt(float x) {
+	float halfx = 0.5f * x;
+	float y = x;
+	long i = *(long*)&y;
+	i = 0x5f3759df - (i>>1);
+	y = *(float*)&i;
+	y = y * (1.5f - (halfx * y * y));
+	return y;
+}
 #define  PI 3.141592654
 #define  RAD2DEC 57.29577951
 

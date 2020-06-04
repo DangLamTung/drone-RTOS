@@ -18,6 +18,8 @@
 
 
 #include "mpu_data_type.hpp"
+#include "LPF.hpp"
+
 #define  MPU_ADDRESS     0xD0
 #define  MAG_ADRRESS     0x18
 
@@ -101,25 +103,18 @@ float t;
 double x_k[4];
 double P_plus_k[49];
 
-
-
-
-
 float w,w1,w2;
 float w_,w1_,w2_;
 float w__,w1__,w2__;
 
 static const double dv1[6] = { 1.0, 1.3085, 1.0, 1.0, -1.9382, 0.94 };
 
-float A_m[9] = {
-
-	    0.0044 ,   0.0002  , -0.0000,
-	    0.0002  ,  0.0045  ,  0.0000,
-	   -0.0000  ,  0.0000  ,  0.0053};
-float b_m[3] = {
-		-41.2889,
-		   94.2928,
-		    2.2679};
+float A_m[9] = {0.0049 ,   0.0002,    0.0000,
+		        0.0002,    0.0047,   -0.0000,
+		        0.0000,   -0.0000,    0.0052};
+float b_m[3] = {-1.7839,
+		        142.0261,
+		        21.9343};
 
 float b0 = 1.000;
 float b1 = 1.3085;
@@ -233,6 +228,8 @@ char init_MPU(){
 	    	    }
 	    	      //HAL_Delay(100);
 	      }
+
+
   return status;
 }
 void adding_raw(){
@@ -255,14 +252,13 @@ void delete_raw(){
 }
 
 
-IMU_data process_MPU(){
+IMU_data process_MPU(bool EKF, bool LPF){
 	IMU_data data_raw;
 	uint8_t data[13];
-    uint8_t mag_data[7];
-	uint8_t status;
+
 	uint8_t reg = ACCEL_XOUT_H;
 	uint8_t device_address = MPU_ADDRESS;
-	uint8_t magnet_address = MAG_ADRRESS;
+
 
 	while(HAL_I2C_Master_Transmit(&hi2c1,(uint16_t)device_address, &reg, 1, 1000) != HAL_OK);
 	while(HAL_I2C_Master_Receive(&hi2c1,(uint16_t)device_address, data,14, 1000) != HAL_OK);
@@ -280,27 +276,60 @@ IMU_data process_MPU(){
 	Acc_x= (Acc_x)/16384.0 - bAx ;
 	Acc_y = (Acc_y)/16384.0 - bAy;
 	Acc_z = (Acc_z)/16384.0 + bAz;
-
+    if(!EKF){
 	Gyro_x = (Gyro_x )/16.4- bGx;
 	Gyro_y = (Gyro_y )/16.4- bGy;
 	Gyro_z = (Gyro_z )/16.4- bGz;
+    }
+    else{
+    	Gyro_x = (Gyro_x )/16.4;
+    	Gyro_y = (Gyro_y )/16.4;
+    	Gyro_z = (Gyro_z )/16.4;
+    }
 
-    data_raw.Gyro_x = Gyro_x;
-    data_raw.Gyro_y = Gyro_y;
-    data_raw.Gyro_z = Gyro_z;
-    data_raw.Acc_x = Acc_x;
-    data_raw.Acc_y = Acc_y;
-    data_raw.Acc_z = Acc_z;
+    if(!LPF){
+		data_raw.Gyro_x = Gyro_x;
+		data_raw.Gyro_y = Gyro_y;
+		data_raw.Gyro_z = Gyro_z;
+		data_raw.Acc_x = Acc_x;
+		data_raw.Acc_y = Acc_y;
+		data_raw.Acc_z = Acc_z;
+    }
+
     return data_raw;
 }
-MAG_data process_magnet(){
+
+MAG_data magnet_get_raw(){
 	MAG_data temp;
-	uint8_t data[13];
 	uint8_t mag_data[7];
 
 	uint8_t status;
 	uint8_t reg = ACCEL_XOUT_H;
-	uint8_t device_address = MPU_ADDRESS;
+	uint8_t magnet_address = MAG_ADRRESS;
+	 reg = 0x02;
+		while(HAL_I2C_Master_Transmit(&hi2c1,(uint16_t)magnet_address, &reg, 1, 1000) != HAL_OK);
+		while(HAL_I2C_Master_Receive(&hi2c1,(uint16_t)magnet_address, &status,1, 1000) != HAL_OK);
+	    if(status == 3){
+	    	reg = 0x03;
+	    	while(HAL_I2C_Master_Transmit(&hi2c1,(uint16_t)magnet_address, &reg, 1, 1000) != HAL_OK);
+	    	while(HAL_I2C_Master_Receive(&hi2c1,(uint16_t)magnet_address, (uint8_t *)mag_data,7, 1000) != HAL_OK);
+	//    	if(!(mag_data[6]|MAGIC_OVERFLOW_MASK)){
+	    		Mag_x = (int16_t)(mag_data[0] | (mag_data[1]<<8));
+	    		Mag_y = (int16_t)(mag_data[2] | (mag_data[3]<<8));
+	    		Mag_z = (int16_t)(mag_data[4] | (mag_data[5]<<8));
+	}
+	    temp.Mag_x = Mag_x;
+	    temp.Mag_y = Mag_y;
+	    temp.Mag_z = Mag_z;
+	    return temp;
+}
+
+MAG_data process_magnet(){
+	MAG_data temp;
+	uint8_t mag_data[7];
+
+	uint8_t status;
+	uint8_t reg = ACCEL_XOUT_H;
 	uint8_t magnet_address = MAG_ADRRESS;
 	 reg = 0x02;
 		while(HAL_I2C_Master_Transmit(&hi2c1,(uint16_t)magnet_address, &reg, 1, 1000) != HAL_OK);
@@ -332,8 +361,8 @@ MAG_data process_magnet(){
 }
 EULER_angle complementary_filter(IMU_data data, float dt, float alpha){
 	EULER_angle temp;
-
-	float roll_acc, pitch_acc,yaw_mag;
+	float pitch_acc, roll_acc;
+	if(data.Acc_x != 0 && data.Acc_y != 0 && data.Acc_z !=0){
     roll_acc = atan2(data.Acc_y,data.Acc_z)*RAD2DEC;
     if(roll_acc<0){
     	roll_acc+=180;
@@ -347,25 +376,100 @@ EULER_angle complementary_filter(IMU_data data, float dt, float alpha){
 
 	com_angle_r = alpha*(com_angle_r + dt*data.Gyro_x) + (1-alpha)*roll_acc;
 	com_angle_p = alpha*(com_angle_p + dt*data.Gyro_y) + (1-alpha)*pitch_acc;
+	}
     temp.pitch = com_angle_p;
     temp.roll = com_angle_r;
 
     return temp;
 }
 
-EULER_angle quat2euler(quaternion q){
+void notify_state(AHRS_con state){
+    if(state.IMU == true && state.magnet == true && state.magnet == true){
+    for(uint8_t i = 0; i<4; i++){
+	HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_2);
+ 	HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_12);
+ 	HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_13);
+ 	HAL_Delay(100);
+    }
+    }
+    HAL_Delay(1000);
+}
 
+AHRS_con check_AHRS(bool notify){
+	AHRS_con state;
+	uint8_t magnet_address = MAG_ADRRESS;
+	uint8_t device_address = MPU_ADDRESS;
+	uint8_t  BMP_ADDRESS  = 0xEE;
+	 if (HAL_I2C_IsDeviceReady(&hi2c1, device_address, 3, 2) != HAL_OK) {
+	    	HAL_GPIO_WritePin(GPIOB, GPIO_PIN_12,GPIO_PIN_SET);
+	    	HAL_Delay(500);
+	    	HAL_GPIO_WritePin(GPIOB, GPIO_PIN_12,GPIO_PIN_RESET);
+	    	HAL_Delay(500);
+	    	state.IMU = false;
+	}
+	if (HAL_I2C_IsDeviceReady(&hi2c1, magnet_address, 3, 200) != HAL_OK) {
+		HAL_GPIO_WritePin(GPIOB, GPIO_PIN_13,GPIO_PIN_SET);
+		HAL_Delay(500);
+		HAL_GPIO_WritePin(GPIOB, GPIO_PIN_13,GPIO_PIN_RESET);
+		HAL_Delay(500);
+		state.magnet = false;
+	}
+	 if(HAL_I2C_IsDeviceReady(&hi2c1, (uint8_t) BMP_ADDRESS, 3, 2) != HAL_OK) {
+	    	HAL_GPIO_WritePin(GPIOB, GPIO_PIN_2,GPIO_PIN_SET);
+	    	HAL_Delay(500);
+	    	HAL_GPIO_WritePin(GPIOB, GPIO_PIN_2,GPIO_PIN_RESET);
+	    	HAL_Delay(500);
+	    	state.baro = false;
+	      }
+	 if(notify){
+		 notify_state(state);
+	 }
+    return state;
+}
+
+EULER_angle quat2euler(quaternion q){
+	float q0,q1,q2,q3,r,p,y;
+
+	EULER_angle angle_e;
+	q0 = q.q0;
+	q1 = q.q1;
+	q2 = q.q2;
+	q3 = q.q3;
+
+	float sinr = 2*(q0*q1 + q2 * q3);
+	float cosr = 1 - 2*(q1*q1 + q2 * q2);
+	r = atan2(sinr, cosr);
+
+
+		float sinp = 2*( q0*q2 - q3*q1);
+	    if (sinp >= 1)
+	    	p = PI/2;
+	    else{
+	    	if(sinp <= -1){
+	    	p = -PI/2;
+	    }
+	    else{
+	    	p = asin(sinp);
+	    }
+	    }
+
+
+		float siny = 2*( q0*q3 + q2*q1);
+		float cosy = 1 - 2*( q1*q1 + q3*q3);
+		y = atan2(siny, cosy);
+
+		angle_e.roll = r*RAD2DEC;
+		angle_e.pitch = p*RAD2DEC;
+		angle_e.yaw = y*RAD2DEC;
+		return angle_e;
 }
 void calibration_IMU(){
     /*This function is performed when the sensor is fully stationary, we assume that MPU has been inited*/
-	    char buffer[8];
 //	    print_msg("Calibrating the sensor....\n");
 		uint8_t data[13];
-		uint8_t mag_data[7];
-		uint8_t status;
 		uint8_t reg = ACCEL_XOUT_H;
 		uint8_t device_address = MPU_ADDRESS;
-		uint8_t magnet_address = MAG_ADRRESS;
+
         for(int i = 0; i<200; i++){
 
 		while(HAL_I2C_Master_Transmit(&hi2c1,(uint16_t)device_address, &reg, 1, 1000) != HAL_OK);
