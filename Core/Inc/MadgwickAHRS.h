@@ -28,7 +28,7 @@ float magd_r,magd_p,magd_y;
 // Definitions
 
 #define sampleFreq	512.0f		// sample frequency in Hz
-#define betaDef		0.1	// 2 * proportional gain
+#define betaDef		0.75	// 2 * proportional gain
 
 //---------------------------------------------------------------------------------------------------
 // Variable definitions

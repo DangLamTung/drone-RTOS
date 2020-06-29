@@ -7,6 +7,9 @@
 
 #ifndef SRC_PID_H_
 #define SRC_PID_H_
+#include "LPF.hpp"
+
+
 
 typedef struct{
 	float Kp1;
@@ -32,6 +35,27 @@ typedef struct{
 	uint16_t data[12];
     uint8_t crc;
 }PID_raw;
+
+PID_raw convert(PID_value pid){
+	PID_raw raw;
+	raw.data[0] = pid.Kp1;
+	raw.data[1] = pid.Ki1;
+	raw.data[2] = pid.Kd1;
+
+	raw.data[3] = pid.Kp2;
+	raw.data[4] = pid.Ki2;
+	raw.data[5] = pid.Kd2;
+
+	raw.data[6] = pid.Kp3;
+	raw.data[7] = pid.Ki3;
+	raw.data[8] = pid.Kd3;
+
+	raw.data[9] = pid.Kp4;
+	raw.data[10] = pid.Ki4;
+	raw.data[11] = pid.Kd4;
+
+	return raw;
+}
 PID_raw pid_decode(uint8_t data[24]){
 	PID_raw pid;
 
@@ -67,23 +91,73 @@ public:
 	float Error, pre_Error, pre_pre_Error;
 	float P_part, I_part, D_part, Out, pre_out;
     float Kp, Ki, Kd, T;
-	void update(float setpoint, float input){
-		P_part = Kp*(Error - pre_Error);
-		I_part = 0.5*Ki*T*(Error + pre_Error);
-		D_part = Kd/T*( Error - 2*pre_Error+ pre_pre_Error);
-		Out = pre_out + P_part + I_part + D_part ;
-		pre_pre_Error = pre_Error;
+    LPF Dterm;
+
+	float update(float setpoint, float input){
+		Error = setpoint - input;
+		P_part = Kp*(Error);
+		I_part += Ki*T*Error;
+		if(I_part > 500){
+			I_part = 500;
+		}
+		D_part = Kd*(Error - pre_Error)/T;
+		Out = P_part + I_part + D_part ;
 		pre_Error = Error;
 		pre_out = Out;
-	}
 
-	PID(float Kp,float Ki,float Kd,float T);
+		return Out;
+	}
+	int round(double x)
+	{
+	    if (x < 0.0)
+	    	if(x > -1000){
+	        return (int)(x - 0.5);
+	    	}
+	    	else{
+	    		return -1000;
+	    	}
+	    else
+	    	if(x < 1000){
+		        return (int)(x + 0.5);
+	    	}
+	    	else{
+	    		return 1000;
+	    	}
+	}
+	int get_control_value()
+	{
+	    if (Out < 0.0)
+	    	if(Out > -1000){
+	        return (int)(Out - 0.5);
+	    	}
+	    	else{
+	    		return -1000;
+	    	}
+	    else
+	    	if(Out < 1000){
+		        return (int)(Out + 0.5);
+	    	}
+	    	else{
+	    		return 1000;
+	    	}
+
+	}
+    void load(float Kp,float Ki,float Kd,float T){
+    	this->Kp = Kp;
+    	this->Ki = Ki;
+    	this->Kd = Kd;
+    	this->T = T;
+
+    	Dterm.load(LPF_10HZ);
+    }
+	PID();
 	virtual ~PID();
 };
-PID::PID(float Kp,float Ki,float Kd,float T){
-	this->Kp = Kp;
-	this->Ki = Ki;
-    this->Kd = Kd;
-    this->T = T;
+PID::~PID(){
+
+}
+
+PID::PID(){
+
 }
 #endif /* SRC_PID_H_ */

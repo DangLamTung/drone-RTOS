@@ -32,6 +32,8 @@ extern "C" {
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+#include "nrf24_hal.h"
+#include "nrf24.h"
 
 /* USER CODE END Includes */
 
@@ -42,6 +44,7 @@ UART_HandleTypeDef huart3;
 TIM_HandleTypeDef htim1;
 TIM_HandleTypeDef htim4;
 UART_HandleTypeDef huart1;
+SPI_HandleTypeDef hspi1;
 /* USER CODE END ET */
 
 /* Exported constants --------------------------------------------------------*/
@@ -49,6 +52,7 @@ UART_HandleTypeDef huart1;
 #define ARMED_      1
 #define UNARMED    0
 
+#define TEST_MODE         3
 #define STANDBY           2
 #define PID_TUNE_MODE     1
 #define FLY_MODE          0
@@ -58,12 +62,22 @@ UART_HandleTypeDef huart1;
 /* USER CODE BEGIN EM */
 uint8_t BOARD_MODE;
 uint8_t ARMED;
+
+#define CE_Pin GPIO_PIN_4
+#define CE_GPIO_Port GPIOC
+#define CS_Pin GPIO_PIN_5
+#define CS_GPIO_Port GPIOC
+/* USER CODE BEGIN Private defines */
+uint8_t nRF24_payload[12]; // buffer for payload
+uint8_t payload_length; // variable to store a length of received payload
+uint8_t pipe; // pipe number
+
 /* USER CODE END EM */
 
 void HAL_TIM_MspPostInit(TIM_HandleTypeDef *htim);
 
 /* Exported functions prototypes ---------------------------------------------*/
-
+void Error_Handler(void);
 
 /* USER CODE BEGIN EFP */
 void Error_Handler(void);
@@ -358,7 +372,38 @@ static void MX_GPIO_Init(void)
 
 }
 
+static void MX_SPI1_Init(void)
+{
 
+  /* USER CODE BEGIN SPI1_Init 0 */
+
+  /* USER CODE END SPI1_Init 0 */
+
+  /* USER CODE BEGIN SPI1_Init 1 */
+
+  /* USER CODE END SPI1_Init 1 */
+  /* SPI1 parameter configuration*/
+  hspi1.Instance = SPI1;
+  hspi1.Init.Mode = SPI_MODE_MASTER;
+  hspi1.Init.Direction = SPI_DIRECTION_2LINES;
+  hspi1.Init.DataSize = SPI_DATASIZE_8BIT;
+  hspi1.Init.CLKPolarity = SPI_POLARITY_LOW;
+  hspi1.Init.CLKPhase = SPI_PHASE_1EDGE;
+  hspi1.Init.NSS = SPI_NSS_SOFT;
+  hspi1.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_8;
+  hspi1.Init.FirstBit = SPI_FIRSTBIT_MSB;
+  hspi1.Init.TIMode = SPI_TIMODE_DISABLE;
+  hspi1.Init.CRCCalculation = SPI_CRCCALCULATION_DISABLE;
+  hspi1.Init.CRCPolynomial = 10;
+  if (HAL_SPI_Init(&hspi1) != HAL_OK)
+  {
+//    Error_Handler();
+  }
+  /* USER CODE BEGIN SPI1_Init 2 */
+
+  /* USER CODE END SPI1_Init 2 */
+
+}
 /* USER CODE END EFP */
 
 /* Private defines -----------------------------------------------------------*/

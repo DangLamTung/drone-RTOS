@@ -27,9 +27,11 @@ Core/Src/main.o: ../Core/Src/main.cpp ../Core/Inc/main.h \
  ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_i2c_ex.h \
  ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_pwr.h \
  ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_pwr_ex.h \
+ ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_spi.h \
  ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_tim.h \
  ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_tim_ex.h \
  ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_uart.h \
+ ../Core/Inc/nrf24_hal.h ../Core/Inc/nrf24.h \
  ../Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS/cmsis_os.h \
  ../Middlewares/Third_Party/FreeRTOS/Source/include/FreeRTOS.h \
  ../Core/Inc/FreeRTOSConfig.h ../Core/Inc/RTOS_timer.h \
@@ -48,11 +50,12 @@ Core/Src/main.o: ../Core/Src/main.cpp ../Core/Inc/main.h \
  ../Middlewares/Third_Party/FreeRTOS/Source/include/event_groups.h \
  ../Middlewares/Third_Party/FreeRTOS/Source/include/timers.h \
  ../Core/Inc/mpu9250.hpp ../Core/Inc/mpu_data_type.hpp \
- ../Core/Inc/LPF.hpp ../Core/Inc/sbus.h ../Core/Inc/main.h \
- ../Core/Inc/MadgwickAHRS.h ../Core/Inc/print_func.hpp ../Core/Src/EKF.h \
- ../Core/Src/Matrix.hpp ../Core/Inc/mpu_data_type.hpp \
- ../Core/Inc/bmp180.h ../Core/Inc/flash.h ../Core/Inc/print_func.hpp \
- ../Core/Inc/PID.h ../Core/Inc/PID.h
+ ../Core/Inc/LPF.hpp ../Core/Inc/MadgwickAHRS.h \
+ ../Core/Inc/print_func.hpp ../Core/Inc/PID.h ../Core/Inc/IMU_EKF.hpp \
+ ../Core/Inc/Matrix.hpp ../Core/Inc/mpu_data_type.hpp \
+ ../Core/Inc/bmp180.h ../Core/Inc/main.h ../Core/Inc/flash.h \
+ ../Core/Inc/print_func.hpp ../Core/Inc/PID.h \
+ ../Core/Inc/MotorController.hpp ../Core/Inc/sbus.h
 
 ../Core/Inc/main.h:
 
@@ -112,11 +115,17 @@ Core/Src/main.o: ../Core/Src/main.cpp ../Core/Inc/main.h \
 
 ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_pwr_ex.h:
 
+../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_spi.h:
+
 ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_tim.h:
 
 ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_tim_ex.h:
 
 ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_uart.h:
+
+../Core/Inc/nrf24_hal.h:
+
+../Core/Inc/nrf24.h:
 
 ../Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS/cmsis_os.h:
 
@@ -160,21 +169,21 @@ Core/Src/main.o: ../Core/Src/main.cpp ../Core/Inc/main.h \
 
 ../Core/Inc/LPF.hpp:
 
-../Core/Inc/sbus.h:
-
-../Core/Inc/main.h:
-
 ../Core/Inc/MadgwickAHRS.h:
 
 ../Core/Inc/print_func.hpp:
 
-../Core/Src/EKF.h:
+../Core/Inc/PID.h:
 
-../Core/Src/Matrix.hpp:
+../Core/Inc/IMU_EKF.hpp:
+
+../Core/Inc/Matrix.hpp:
 
 ../Core/Inc/mpu_data_type.hpp:
 
 ../Core/Inc/bmp180.h:
+
+../Core/Inc/main.h:
 
 ../Core/Inc/flash.h:
 
@@ -182,4 +191,6 @@ Core/Src/main.o: ../Core/Src/main.cpp ../Core/Inc/main.h \
 
 ../Core/Inc/PID.h:
 
-../Core/Inc/PID.h:
+../Core/Inc/MotorController.hpp:
+
+../Core/Inc/sbus.h:

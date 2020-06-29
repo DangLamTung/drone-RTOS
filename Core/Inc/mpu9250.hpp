@@ -109,12 +109,15 @@ float w__,w1__,w2__;
 
 static const double dv1[6] = { 1.0, 1.3085, 1.0, 1.0, -1.9382, 0.94 };
 
-float A_m[9] = {0.0049 ,   0.0002,    0.0000,
-		        0.0002,    0.0047,   -0.0000,
-		        0.0000,   -0.0000,    0.0052};
-float b_m[3] = {-1.7839,
-		        142.0261,
-		        21.9343};
+float A_m[9] = {
+	    0.0042 ,   0.0003 ,  -0.0001,
+	    0.0003 ,   0.0039 ,   0.0001,
+	   -0.0001 ,   0.0001 ,   0.0041
+};
+float b_m[3] = {
+	    1.4756,
+	  154.7403,
+	 -305.3349};
 
 float b0 = 1.000;
 float b1 = 1.3085;
@@ -122,7 +125,122 @@ float b2 = 1.0000;
 float roll_acc;
 float a1 = -1.9382;
 float a2 = 0.9400;
+/******************************************Clear HAL_BUSY************************************************************/
+typedef struct
+ {
+    I2C_HandleTypeDef* instance;
+    uint16_t sdaPin;
+    GPIO_TypeDef* sdaPort;
+    uint16_t sclPin;
+    GPIO_TypeDef* sclPort;
+} I2C_Module_t;
 
+I2C_Module_t i2c;
+
+static uint8_t wait_for_gpio_state_timeout(GPIO_TypeDef *port, uint16_t pin, GPIO_PinState state, uint32_t timeout)
+ {
+    uint32_t Tickstart = HAL_GetTick();
+    uint8_t ret = 1;
+    /* Wait until flag is set */
+    for(;(state != HAL_GPIO_ReadPin(port, pin)) && (1 == ret);)
+    {
+        /* Check for the timeout */
+        if (timeout != HAL_MAX_DELAY)
+        {
+            if ((timeout == 0U) || ((HAL_GetTick() - Tickstart) > timeout))
+            {
+                ret = 0;
+            }
+            else
+            {
+            }
+        }
+        asm("nop");
+    }
+    return ret;
+}
+
+static void I2C_ClearBusyFlagErratum(I2C_Module_t* i2c, uint32_t timeout)
+{
+    GPIO_InitTypeDef GPIO_InitStructure;
+
+    I2C_HandleTypeDef* handler = NULL;
+
+    handler = i2c->instance;
+
+    // 1. Clear PE bit.
+    CLEAR_BIT(handler->Instance->CR1, I2C_CR1_PE);
+
+    //  2. Configure the SCL and SDA I/Os as General Purpose Output Open-Drain, High level (Write 1 to GPIOx_ODR).
+    HAL_I2C_DeInit(handler);
+
+    GPIO_InitStructure.Mode = GPIO_MODE_OUTPUT_OD;
+    GPIO_InitStructure.Pull = GPIO_NOPULL;
+
+    GPIO_InitStructure.Pin = i2c->sclPin;
+    HAL_GPIO_Init(i2c->sclPort, &GPIO_InitStructure);
+
+    GPIO_InitStructure.Pin = i2c->sdaPin;
+    HAL_GPIO_Init(i2c->sdaPort, &GPIO_InitStructure);
+
+    // 3. Check SCL and SDA High level in GPIOx_IDR.
+    HAL_GPIO_WritePin(i2c->sdaPort, i2c->sdaPin, GPIO_PIN_SET);
+    HAL_GPIO_WritePin(i2c->sclPort, i2c->sclPin, GPIO_PIN_SET);
+
+    wait_for_gpio_state_timeout(i2c->sclPort, i2c->sclPin, GPIO_PIN_SET, timeout);
+    wait_for_gpio_state_timeout(i2c->sdaPort, i2c->sdaPin, GPIO_PIN_SET, timeout);
+
+    // 4. Configure the SDA I/O as General Purpose Output Open-Drain, Low level (Write 0 to GPIOx_ODR).
+    HAL_GPIO_WritePin(i2c->sdaPort, i2c->sdaPin, GPIO_PIN_RESET);
+
+    // 5. Check SDA Low level in GPIOx_IDR.
+    wait_for_gpio_state_timeout(i2c->sdaPort, i2c->sdaPin, GPIO_PIN_RESET, timeout);
+
+    // 6. Configure the SCL I/O as General Purpose Output Open-Drain, Low level (Write 0 to GPIOx_ODR).
+    HAL_GPIO_WritePin(i2c->sclPort, i2c->sclPin, GPIO_PIN_RESET);
+
+    // 7. Check SCL Low level in GPIOx_IDR.
+    wait_for_gpio_state_timeout(i2c->sclPort, i2c->sclPin, GPIO_PIN_RESET, timeout);
+
+    // 8. Configure the SCL I/O as General Purpose Output Open-Drain, High level (Write 1 to GPIOx_ODR).
+    HAL_GPIO_WritePin(i2c->sclPort, i2c->sclPin, GPIO_PIN_SET);
+
+    // 9. Check SCL High level in GPIOx_IDR.
+    wait_for_gpio_state_timeout(i2c->sclPort, i2c->sclPin, GPIO_PIN_SET, timeout);
+
+    // 10. Configure the SDA I/O as General Purpose Output Open-Drain , High level (Write 1 to GPIOx_ODR).
+    HAL_GPIO_WritePin(i2c->sdaPort, i2c->sdaPin, GPIO_PIN_SET);
+
+    // 11. Check SDA High level in GPIOx_IDR.
+    wait_for_gpio_state_timeout(i2c->sdaPort, i2c->sdaPin, GPIO_PIN_SET, timeout);
+
+    // 12. Configure the SCL and SDA I/Os as Alternate function Open-Drain.
+    GPIO_InitStructure.Mode = GPIO_MODE_AF_OD;
+    GPIO_InitStructure.Alternate = GPIO_AF4_I2C2;
+
+    GPIO_InitStructure.Pin = i2c->sclPin;
+    HAL_GPIO_Init(i2c->sclPort, &GPIO_InitStructure);
+
+    GPIO_InitStructure.Pin = i2c->sdaPin;
+    HAL_GPIO_Init(i2c->sdaPort, &GPIO_InitStructure);
+
+    // 13. Set SWRST bit in I2Cx_CR1 register.
+    SET_BIT(handler->Instance->CR1, I2C_CR1_SWRST);
+    asm("nop");
+
+    /* 14. Clear SWRST bit in I2Cx_CR1 register. */
+    CLEAR_BIT(handler->Instance->CR1, I2C_CR1_SWRST);
+    asm("nop");
+
+    /* 15. Enable the I2C peripheral by setting the PE bit in I2Cx_CR1 register */
+    SET_BIT(handler->Instance->CR1, I2C_CR1_PE);
+    asm("nop");
+
+    // Call initialization function.
+    HAL_I2C_Init(handler);
+}
+
+/******************************************End HAL_BUSY************************************************************/
 char init_MPU(){
     char status = 1;
     uint8_t d[2];
@@ -130,22 +248,30 @@ char init_MPU(){
     uint8_t magnet_address = MAG_ADRRESS;
 
 
+    i2c.instance = &hi2c1;
+    i2c.sdaPort =GPIOB;
+    i2c.sclPort = GPIOB;
+    i2c.sclPin = GPIO_PIN_8;
+    i2c.sdaPin = GPIO_PIN_9;
+
 
   	char rx_data[25];
     while (HAL_I2C_IsDeviceReady(&hi2c1, device_address, 3, 2) != HAL_OK) {
-    	HAL_GPIO_WritePin(GPIOB, GPIO_PIN_12,GPIO_PIN_SET);
-    	HAL_Delay(500);
-    	HAL_GPIO_WritePin(GPIOB, GPIO_PIN_12,GPIO_PIN_RESET);
+    	if(HAL_I2C_IsDeviceReady(&hi2c1, device_address, 3, 2) == HAL_BUSY){
+			HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_12);
+			I2C_ClearBusyFlagErratum(&i2c, 10);
+    	}
+    	HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_13);
       }
 
-    HAL_GPIO_WritePin(GPIOB, GPIO_PIN_13,GPIO_PIN_SET);
-
+    HAL_GPIO_WritePin(GPIOB, GPIO_PIN_12,GPIO_PIN_RESET);
+    HAL_GPIO_WritePin(GPIOB, GPIO_PIN_13,GPIO_PIN_RESET);
 
 //    HAL_UART_Transmit(&huart3,rx_data, strlen(rx_data),1000);
 
 	/* Try to transmit via I2C */
 	d[0] = PWR_MGMT_1;
-    d[1] = 0;
+    d[1] = 1;
 	if(HAL_I2C_Master_Transmit(&hi2c1,(uint16_t)device_address , (uint8_t *)d, 2, 1000) != HAL_OK)
 	{
 
@@ -198,10 +324,8 @@ char init_MPU(){
 	    	  	d[1] = ROM_MODE;
 	    	  	while(HAL_I2C_Master_Transmit(&hi2c1,(uint16_t) magnet_address,(uint8_t *)d,2,2)!=HAL_OK);
 
-	    	  //	HAL_Delay(100);
-	    	  	 for(long i = 1000000; i>0 ;i--){
+	    	  	HAL_Delay(100);
 
-	    	  		    	      }
 
 	    	  	uint8_t sensitive = ASAX_AD;
 	    	  	uint8_t asa [3];
@@ -216,17 +340,12 @@ char init_MPU(){
 	    	      d[1] = zero;
 	    	      while(HAL_I2C_Master_Transmit(&hi2c1,(uint16_t)magnet_address,(uint8_t *)d,2,1000)!=HAL_OK);
 
-	    	      for(long i = 1000000; i>0 ;i--){
-
-	    	      }
+	    	      HAL_Delay(100);
 
 	    	      d[0] = CNTL1_AD;
 	    	      d[1] = 0x16;
 	    	      while(HAL_I2C_Master_Transmit(&hi2c1,(uint16_t)magnet_address,(uint8_t *)d,2,1000)!=HAL_OK);
-	    	      for(long i = 1000000; i>0 ;i--){
-
-	    	    }
-	    	      //HAL_Delay(100);
+	    	      HAL_Delay(100);
 	      }
 
 
@@ -260,8 +379,20 @@ IMU_data process_MPU(bool EKF, bool LPF){
 	uint8_t device_address = MPU_ADDRESS;
 
 
-	while(HAL_I2C_Master_Transmit(&hi2c1,(uint16_t)device_address, &reg, 1, 1000) != HAL_OK);
-	while(HAL_I2C_Master_Receive(&hi2c1,(uint16_t)device_address, data,14, 1000) != HAL_OK);
+	while(HAL_I2C_Master_Transmit(&hi2c1,(uint16_t)device_address, &reg, 1, 1000) != HAL_OK){
+//		if(HAL_I2C_IsDeviceReady(&hi2c1, device_address, 3, 2) == HAL_BUSY){
+//			HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_12);
+//			I2C_ClearBusyFlagErratum(&i2c, 10);
+//	    }
+//	    HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_13);
+	}
+	while(HAL_I2C_Master_Receive(&hi2c1,(uint16_t)device_address, data,14, 1000) != HAL_OK){
+//		if(HAL_I2C_IsDeviceReady(&hi2c1, device_address, 3, 2) == HAL_BUSY){
+//					HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_12);
+//					I2C_ClearBusyFlagErratum(&i2c, 10);
+//			    }
+//			    HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_13);
+	}
 
 	Acc_x = (int16_t)(data[0] << 8 | data[1]);
 	Acc_y = (int16_t)(data[2] << 8 | data[3]);
@@ -362,6 +493,7 @@ MAG_data process_magnet(){
 EULER_angle complementary_filter(IMU_data data, float dt, float alpha){
 	EULER_angle temp;
 	float pitch_acc, roll_acc;
+
 	if(data.Acc_x != 0 && data.Acc_y != 0 && data.Acc_z !=0){
     roll_acc = atan2(data.Acc_y,data.Acc_z)*RAD2DEC;
     if(roll_acc<0){
@@ -372,14 +504,17 @@ EULER_angle complementary_filter(IMU_data data, float dt, float alpha){
     		roll_acc-=180;
     	}
     }
-    pitch_acc = atan(data.Acc_x/sqrt(data.Acc_y*data.Acc_y + data.Acc_z*data.Acc_z))*RAD2DEC;
-
-	com_angle_r = alpha*(com_angle_r + dt*data.Gyro_x) + (1-alpha)*roll_acc;
-	com_angle_p = alpha*(com_angle_p + dt*data.Gyro_y) + (1-alpha)*pitch_acc;
-	}
     temp.pitch = com_angle_p;
     temp.roll = com_angle_r;
+    pitch_acc = atan(data.Acc_x/sqrt(data.Acc_y*data.Acc_y + data.Acc_z*data.Acc_z))*RAD2DEC;
 
+		com_angle_r = alpha*(com_angle_r + dt*data.Gyro_x) + (1-alpha)*roll_acc;
+		com_angle_p = alpha*(com_angle_p + dt*data.Gyro_y) + (1-alpha)*pitch_acc;
+	}
+	if(!isnan(com_angle_r) & !isnan(com_angle_p)){
+		temp.pitch = com_angle_p;
+		temp.roll = com_angle_r;
+	}
     return temp;
 }
 
@@ -463,7 +598,8 @@ EULER_angle quat2euler(quaternion q){
 		angle_e.yaw = y*RAD2DEC;
 		return angle_e;
 }
-void calibration_IMU(){
+IMU_calib_data calibration_IMU(){
+	    IMU_calib_data data_;
     /*This function is performed when the sensor is fully stationary, we assume that MPU has been inited*/
 //	    print_msg("Calibrating the sensor....\n");
 		uint8_t data[13];
@@ -507,9 +643,26 @@ void calibration_IMU(){
      bGy /= 200;
      bGz /= 200;
 
+     data_.bAx = bAx;
+     data_.bAy = bAy;
+     data_.bAz = bAz;
+
+     data_.bGx = bGx;
+     data_.bGy = bGy;
+     data_.bGz = bGz;
+
+     data_.data[0] = bAx;
+     data_.data[1] = bAy;
+     data_.data[2] = bAz;
+
+     data_.data[3] = bGx;
+     data_.data[4] = bGy;
+     data_.data[5] = bGz;
+
 	 HAL_GPIO_WritePin(GPIOB, GPIO_PIN_12,GPIO_PIN_RESET);
 	 HAL_GPIO_WritePin(GPIOB, GPIO_PIN_13,GPIO_PIN_RESET);
 	 HAL_GPIO_WritePin(GPIOB, GPIO_PIN_2,GPIO_PIN_RESET);
+	 return data_;
 }
 
 //void calibration_magnet(){

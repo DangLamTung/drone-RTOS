@@ -32,6 +32,14 @@ bool check_CRC(ESC_value value){
     	return false;
     return true;
 }
+
+bool CRC_thurst(ESC_value value){
+
+    if((value.esc_value1 == value.esc_value2) && (value.esc_value3 == value.esc_value4) && (value.esc_value1 == value.esc_value4))
+    	return true;
+    return false;
+}
+
 void init_ESC(){
 	  HAL_TIM_Base_Start(&htim4);
 	  HAL_TIM_PWM_Start(&htim1,TIM_CHANNEL_1);

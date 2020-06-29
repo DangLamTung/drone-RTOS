@@ -24,6 +24,7 @@ class LPF{
 	double w, w1, w2;
 	double b0,b1,b2;
 	double a1, a2, g;
+	double y1;
 public:
      LPF();
      void load(double coff[6]){
@@ -37,13 +38,15 @@ public:
     	this->g = coff[5];
      }
      double update(double Input){
-    	 double y1;
     	 w = Input - a1*w1 - a2*w2;
     	 y1 = (w*b0 + w1*b1 + w2*b2)*g;
     	 w2 = w1;
     	 w1 = w;
     	 return y1;
      }
+     double get(){
+     	 return y1;
+      }
 };
 LPF::LPF(){
 

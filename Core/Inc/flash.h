@@ -1,5 +1,6 @@
 #include "print_func.hpp"
 #include "PID.h"
+#include "mpu_data_type.hpp"
 #define FLASH_USER_START_ADDR   ADDR_FLASH_SECTOR_11   /* Start @ of user Flash area */
 #define FLASH_USER_END_ADDR     ADDR_FLASH_SECTOR_11  +  GetSectorSize(ADDR_FLASH_SECTOR_11) -1 /* End @ of user Flash area : sector start address + sector size -1 */
 
@@ -28,6 +29,30 @@ static FLASH_EraseInitTypeDef EraseInitStruct;
 /* Private function prototypes -----------------------------------------------*/
 static uint32_t GetSector(uint32_t Address);
 static uint32_t GetSectorSize(uint32_t Sector);
+
+void float2Int16(float val,uint16_t * bytes_array){
+  // Create union of shared memory space
+  union {
+    float float_variable;
+    uint16_t temp_array[2];
+  } u;
+  // Overite bytes of union with float variable
+  u.float_variable = val;
+  // Assign bytes to input array
+  memcpy(bytes_array, u.temp_array, 2);
+}
+float int2Float(uint16_t * bytes_array){
+  // Create union of shared memory space
+  union {
+    float float_variable;
+    uint16_t temp_array[2];
+  } u;
+  for(uint16_t i = 0; i<2; i++){
+	  u.temp_array[i] = bytes_array[i];
+  }
+  return   u.float_variable;
+}
+
 
 
 void decode(uint8_t * buffer,int length, float * data){
@@ -96,12 +121,7 @@ void writeFlash(uint16_t num[12]){
 	    (area defined by FLASH_USER_START_ADDR and FLASH_USER_END_ADDR) ***********/
 
 
-//	  float num[32] = {1.686,6.79,10.54,1.64325,8292.02141,675.686,9.79,0.54,1.25,8.5,11.686,96.9,101.54,1.564325,8241,9,
-//	     		1.08,6.09,10.34,1.64325,1254.352,675.686,9.79,0.54,1.25,8.5,1.68,6.9,11.54,0.5,8.1,92};
 
-
-
-//	  uint8_t temp[4];
 	  int i = 0;
 
 	  Address = FLASH_USER_START_ADDR;
@@ -131,12 +151,120 @@ void writeFlash(uint16_t num[12]){
 	  HAL_FLASH_Lock();
 }
 
+IMU_calib_data readIMUcalib(){
+	  IMU_calib_data calib;
+
+	  float temp_arr_[6];
+
+	  float result;
+
+	  Address = FLASH_USER_START_ADDR+ 2*12 ;
+
+	  uint8_t count = 0;
+
+	  uint8_t temp[4];
+	  while (Address < FLASH_USER_START_ADDR + 2*12 + 4*6)
+	  {
+	    data32 = *(__IO uint32_t*)Address;
+
+	    temp[0] = (uint8_t) ((data32 &0xFF000000)>>24);
+	    temp[1] = (uint8_t) (data32 & 0x00FF0000) >> 16;
+
+	    temp[2] = (uint8_t) ((data32 &0x0000FF00)>>8);
+	    temp[3] = (uint8_t) data32 &0x000000FF;
+
+	    result = bytes2Float(temp);
+	    temp_arr_[count] = result;
+        count ++;
+	    Address = Address + 4;
+	  }
+      calib.bAx = temp_arr_[0];
+      calib.bAy = temp_arr_[1];
+      calib.bAz = temp_arr_[2];
+
+      calib.bGx = temp_arr_[3];
+      calib.bGy = temp_arr_[4];
+      calib.bGz = temp_arr_[5];
+
+      return calib;
+}
+
+IMU_calib_data readImuCalibAndPid(PID_value * pid){
+	  IMU_calib_data calib;
+
+	  float temp_arr_[6];
+
+	  float result;
+
+		  Address = FLASH_USER_START_ADDR;
+		  MemoryProgramStatus = 0x0;
+		  uint16_t temp_arr[12];
+	//	  uint16_t result,result1;
+
+		  uint8_t count = 0;
+		  while (Address < FLASH_USER_START_ADDR + 2*12)
+		  {
+		    data32 = *(__IO uint32_t*)Address;
+
+		    temp_arr[count] = (uint16_t) ((data32 &0xFFFF0000)>>16);
+		    temp_arr[count+1] = (uint16_t) (data32 & 0x0000FFFF);
+
+
+	//	    temp_arr[2] = (uint8_t) ((data32 &0x0000FF00)>>8);
+	//	    temp_arr[3] = (uint8_t) data32 &0x000000FF;
+	//	    result = bytes2Float(temp_arr);
+	        count += 2;
+		    Address = Address + 4;
+		  }
+	      pid->Kp1 = temp_arr[0];
+	      pid->Ki1 = temp_arr[1];
+	      pid->Kd1 = temp_arr[2];
+
+	      pid->Kp2 = temp_arr[3];
+	      pid->Ki2 = temp_arr[4];
+	      pid->Kd2 = temp_arr[5];
+
+	      pid->Kp3 = temp_arr[6];
+	      pid->Ki3 = temp_arr[7];
+	      pid->Kd3 = temp_arr[8];
+
+	      pid->Kp4 = temp_arr[9];
+	      pid->Ki4 = temp_arr[10];
+	      pid->Kd4 = temp_arr[11];
+
+      count = 0;
+	  uint8_t temp[4];
+	  while (Address < FLASH_USER_START_ADDR + 2*12 + 4*6)
+	  {
+	    data32 = *(__IO uint32_t*)Address;
+
+	    temp[0] = (uint8_t) ((data32 &0xFF000000)>>24);
+	    temp[1] = (uint8_t) (data32 & 0x00FF0000) >> 16;
+
+	    temp[2] = (uint8_t) ((data32 &0x0000FF00)>>8);
+	    temp[3] = (uint8_t) data32 &0x000000FF;
+
+	    result = bytes2Float(temp);
+	    temp_arr_[count] = result;
+        count ++;
+	    Address = Address + 4;
+	  }
+      calib.bAx = temp_arr_[0];
+      calib.bAy = temp_arr_[1];
+      calib.bAz = temp_arr_[2];
+
+      calib.bGx = temp_arr_[3];
+      calib.bGy = temp_arr_[4];
+      calib.bGz = temp_arr_[5];
+
+      return calib;
+}
 PID_value readFlash(){
 	  PID_value pid;
 	  Address = FLASH_USER_START_ADDR;
 	  MemoryProgramStatus = 0x0;
 	  uint16_t temp_arr[12];
-	  uint16_t result,result1;
+//	  uint16_t result,result1;
 
 	  uint8_t count = 0;
 	  while (Address < FLASH_USER_START_ADDR + 2*12)
@@ -170,6 +298,113 @@ PID_value readFlash(){
       pid.Kd4 = temp_arr[11];
       return pid;
 }
+void writeCalibration(IMU_calib_data data_imu){
+	 HAL_FLASH_Unlock();
+
+	  /* Erase the user Flash area
+	    (area defined by FLASH_USER_START_ADDR and FLASH_USER_END_ADDR) ***********/
+	 PID_value pid;
+	 pid = readFlash();
+	 PID_raw raw;
+	  /* Get the 1st sector to erase */
+	  FirstSector = GetSector(FLASH_USER_START_ADDR);
+	  /* Get the number of sector to erase from 1st sector*/
+	  NbOfSectors = GetSector(FLASH_USER_END_ADDR) - FirstSector + 1;
+
+	  /* Fill EraseInit structure*/
+	  EraseInitStruct.TypeErase = FLASH_TYPEERASE_SECTORS;
+	  EraseInitStruct.VoltageRange = FLASH_VOLTAGE_RANGE_3;
+	  EraseInitStruct.Sector = FirstSector;
+	  EraseInitStruct.NbSectors = NbOfSectors;
+	  if(HAL_FLASHEx_Erase(&EraseInitStruct, &SectorError) != HAL_OK)
+	  {
+	    /*
+	      Error occurred while sector erase.
+	      User can add here some code to deal with this error.
+	      SectorError will contain the faulty sector and then to know the code error on this sector,
+	      user can call function 'HAL_FLASH_GetError()'
+	    */
+	    /*
+	      FLASH_ErrorTypeDef errorcode = HAL_FLASH_GetError();
+	    */
+
+	  }
+
+	  /* Note: If an erase operation in Flash memory also concerns data in the data or instruction cache,
+	     you have to make sure that these data are rewritten before they are accessed during code
+	     execution. If this cannot be done safely, it is recommended to flush the caches by setting the
+	     DCRST and ICRST bits in the FLASH_CR register. */
+	  __HAL_FLASH_DATA_CACHE_DISABLE();
+	  __HAL_FLASH_INSTRUCTION_CACHE_DISABLE();
+
+	  __HAL_FLASH_DATA_CACHE_RESET();
+	  __HAL_FLASH_INSTRUCTION_CACHE_RESET();
+
+	  __HAL_FLASH_INSTRUCTION_CACHE_ENABLE();
+	  __HAL_FLASH_DATA_CACHE_ENABLE();
+
+	  /* Program the user Flash area word by word
+	    (area defined by FLASH_USER_START_ADDR and FLASH_USER_END_ADDR) ***********/
+
+
+             // Rewrite the PID
+	  raw = convert(pid);
+//	  writeFlash(raw.data);
+	  int i = 0;
+
+	 	  Address = FLASH_USER_START_ADDR;
+	      uint32_t data32;
+	 	  while (i < 12)
+	 	  {
+
+	 		uint32_t temp_val = (raw.data[i] <<16) | (raw.data[i + 1]);
+	 	    if (HAL_FLASH_Program(FLASH_TYPEPROGRAM_WORD, Address, temp_val) == HAL_OK)
+	 	    {
+	 	      Address = Address + 4;
+	 	     data32 = *(__IO uint32_t*)Address;
+	 	    }
+	 	    else
+	 	    {
+	 	      /* Error occurred while writing data in Flash memory.
+	 	         User can add here some code to deal with this error */
+	 	      /*
+	 	        FLASH_ErrorTypeDef errorcode = HAL_FLASH_GetError();
+	 	      */
+
+	 	    }
+	 	    i+=2;
+	 	  }
+
+	  uint8_t temp[4];
+      i = 0;
+
+	  while (i < 6)
+	  {
+		float2Bytes(data_imu.data[i],temp);
+		uint32_t temp_val = (temp[0] <<24) | (temp[1]<<16) | (temp[2]<<8) | temp[3];
+	    if (HAL_FLASH_Program(FLASH_TYPEPROGRAM_WORD, Address, temp_val) == HAL_OK)
+	    {
+		    data32 = *(__IO uint32_t*)Address;
+	      Address = Address + 4;
+
+	    }
+	    else
+	    {
+	      /* Error occurred while writing data in Flash memory.
+	         User can add here some code to deal with this error */
+	      /*
+	        FLASH_ErrorTypeDef errorcode = HAL_FLASH_GetError();
+	      */
+
+	    }
+	    i+=1;
+	  }
+
+	  /* Lock the Flash to disable the flash control register access (recommended
+	     to protect the FLASH memory against possible unwanted operation) *********/
+	  HAL_FLASH_Lock();
+}
+
 /**
   * @brief  Gets the sector of a given address
   * @param  None

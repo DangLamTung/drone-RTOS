@@ -59,6 +59,7 @@
 
 /* External variables --------------------------------------------------------*/
 extern TIM_HandleTypeDef htim7;
+extern DMA_HandleTypeDef hdma_usart3_tx;
 extern UART_HandleTypeDef huart1;
 extern TIM_HandleTypeDef htim14;
 
@@ -161,6 +162,11 @@ void DebugMon_Handler(void)
 /* For the available peripheral interrupt handler names,                      */
 /* please refer to the startup file (startup_stm32f4xx.s).                    */
 /******************************************************************************/
+
+/**
+  * @brief This function handles DMA1 stream3 global interrupt.
+  */
+
 
 /**
   * @brief This function handles USART1 global interrupt.

@@ -1,37 +1,47 @@
-main.h:81:13:void MX_I2C1_Init()	8	static
-main.h:115:13:void MX_TIM1_Init()	96	static
-main.h:202:13:void MX_TIM4_Init()	32	static
-main.h:253:13:void MX_USART1_UART_Init()	8	static
-main.h:286:13:void MX_USART3_UART_Init()	8	static
-main.h:319:13:void MX_GPIO_Init()	48	static
+main.h:95:13:void MX_I2C1_Init()	8	static
+main.h:129:13:void MX_TIM1_Init()	96	static
+main.h:216:13:void MX_TIM4_Init()	32	static
+main.h:267:13:void MX_USART1_UART_Init()	8	static
+main.h:300:13:void MX_USART3_UART_Init()	8	static
+main.h:333:13:void MX_GPIO_Init()	48	static
+main.h:375:13:void MX_SPI1_Init()	8	static
 RTOS_timer.h:11:13:void MX_TIM7_Init()	16	static
 cmath:106:3:constexpr float std::asin(float)	16	static
 cmath:125:3:constexpr float std::atan(float)	16	static
 cmath:144:3:constexpr float std::atan2(float, float)	16	static
 cmath:463:3:constexpr float std::sqrt(float)	16	static
+cmath:618:3:constexpr bool std::isnan(float)	16	static
 mpu_data_type.hpp:59:8:char* ftoa(double, char*, int)	56	static
-mpu_data_type.hpp:190:7:float invSqrt(float)	32	static
-LPF.hpp:29:11:void LPF::load(double*)	16	static
-LPF.hpp:39:13:double LPF::update(double)	48	static
-LPF.hpp:48:1:LPF::LPF()	16	static
-mpu9250.hpp:126:6:char init_MPU()	80	static
-mpu9250.hpp:235:6:void adding_raw()	4	static
-mpu9250.hpp:244:6:void delete_raw()	4	static
-mpu9250.hpp:255:10:IMU_data process_MPU(bool, bool)	56	static
-mpu9250.hpp:302:10:MAG_data magnet_get_raw()	72	static
-mpu9250.hpp:327:10:MAG_data process_magnet()	96	static
-mpu9250.hpp:362:13:EULER_angle complementary_filter(IMU_data, float, float)	80	static
-mpu9250.hpp:386:6:void notify_state(AHRS_con)	24	static
-mpu9250.hpp:398:10:AHRS_con check_AHRS(bool)	32	static
-mpu9250.hpp:430:13:EULER_angle quat2euler(quaternion)	120	static
-mpu9250.hpp:466:6:void calibration_IMU()	56	static
-sbus.h:20:11:ESC_value sbus_decode(uint8_t*)	16	static
-sbus.h:29:6:bool check_CRC(ESC_value)	32	static
-sbus.h:35:6:void init_ESC()	16	static
-sbus.h:60:6:void set_ESC(ESC_value)	24	static
+mpu_data_type.hpp:201:7:float invSqrt(float)	32	static
+LPF.hpp:30:11:void LPF::load(double*)	16	static
+LPF.hpp:40:13:double LPF::update(double)	40	static
+LPF.hpp:47:13:double LPF::get()	16	static
+LPF.hpp:51:1:LPF::LPF()	16	static
+mpu9250.hpp:140:16:uint8_t wait_for_gpio_state_timeout(GPIO_TypeDef*, uint16_t, GPIO_PinState, uint32_t)	32	static,ignoring_inline_asm
+mpu9250.hpp:163:13:void I2C_ClearBusyFlagErratum(I2C_Module_t*, uint32_t)	40	static,ignoring_inline_asm
+mpu9250.hpp:244:6:char init_MPU()	64	static
+mpu9250.hpp:354:6:void adding_raw()	4	static
+mpu9250.hpp:363:6:void delete_raw()	4	static
+mpu9250.hpp:374:10:IMU_data process_MPU(bool, bool)	56	static
+mpu9250.hpp:433:10:MAG_data magnet_get_raw()	72	static
+mpu9250.hpp:458:10:MAG_data process_magnet()	96	static
+mpu9250.hpp:493:13:EULER_angle complementary_filter(IMU_data, float, float)	80	static
+mpu9250.hpp:521:6:void notify_state(AHRS_con)	24	static
+mpu9250.hpp:533:10:AHRS_con check_AHRS(bool)	32	static
+mpu9250.hpp:565:13:EULER_angle quat2euler(quaternion)	120	static
+mpu9250.hpp:601:16:IMU_calib_data calibration_IMU()	64	static
 MadgwickAHRS.h:49:13:EULER_angle MadgwickAHRSupdate(IMU_data, MAG_data, float)	272	static
 MadgwickAHRS.h:189:13:EULER_angle MadgwickAHRSupdateIMU(IMU_data, float)	200	static
 MadgwickAHRS.h:294:13:EULER_angle quaternion_rot(IMU_data, float)	128	static
+PID.h:39:9:PID_raw convert(PID_value)	16	static
+PID.h:59:9:PID_raw pid_decode(uint8_t*)	16	static
+PID.h:80:9:uint8_t check_CRC_pid(PID_raw)	16	static
+PID.h:96:8:float PID::update(float, float)	24	static
+PID.h:127:6:int PID::get_control_value()	24	static
+PID.h:145:10:void PID::load(float, float, float, float)	32	static
+PID.h:156:1:PID::~PID()	16	static
+PID.h:156:1:virtual PID::~PID()	16	static
+PID.h:160:1:PID::PID()	16	static
 print_func.hpp:12:6:void float2Bytes(float, uint8_t*)	24	static
 print_func.hpp:23:7:float bytes2Float(uint8_t*)	24	static
 print_func.hpp:35:6:void print_raw(IMU_data)	32	static
@@ -41,9 +51,9 @@ print_func.hpp:144:6:void print_magnet(MAG_data)	48	static
 print_func.hpp:158:6:void print_every_thing(IMU_data, EULER_angle)	48	static
 print_func.hpp:186:6:void print_msg(char*)	16	static
 print_func.hpp:190:6:void print_euler_compare(EULER_angle, EULER_angle, EULER_angle)	72	static
-print_func.hpp:233:6:void cpstr(uint8_t*, char*, uint8_t)	32	static
-print_func.hpp:243:10:uint32_t sum_array(char*)	24	static
-Matrix.hpp:31:9:int Matrix::get_value(double*)	24	static
+print_func.hpp:232:6:void print_pid_value(PID_value)	32	static
+print_func.hpp:286:6:void cpstr(uint8_t*, char*, uint8_t)	32	static
+print_func.hpp:296:10:uint32_t sum_array(char*)	24	static
 Matrix.hpp:53:1:Matrix::Matrix(int, int)	32	static
 Matrix.hpp:65:1:Matrix::~Matrix()	16	static
 Matrix.hpp:65:1:virtual Matrix::~Matrix()	16	static
@@ -58,31 +68,42 @@ Matrix.hpp:21:7:constexpr Matrix& Matrix::operator=(const Matrix&)	24	static
 Matrix.hpp:154:8:double determinant(Matrix)	1712	static
 Matrix.hpp:178:8:Matrix adjoint(Matrix)	1296	static
 Matrix.hpp:214:8:Matrix inverse(Matrix)	1704	static
-EKF.h:30:7:void EKF::loadEKF(double*, double*, double*, double*)	24	static
-EKF.h:251:1:EKF::EKF()	16	static
-EKF.h:254:1:EKF::~EKF()	16	static
-EKF.h:254:1:virtual EKF::~EKF()	16	static
+IMU_EKF.hpp:241:1:IMU_EKF::IMU_EKF()	16	static
+IMU_EKF.hpp:244:1:IMU_EKF::~IMU_EKF()	16	static
+IMU_EKF.hpp:244:1:virtual IMU_EKF::~IMU_EKF()	16	static
 bmp180.h:19:6:void initBMP()	24	static
 bmp180.h:68:6:long int readBMP()	24	static
 bmp180.h:139:8:double sample_BMP()	32	static
 bmp180.h:148:8:double get_alt_bmp()	40	static
-PID.h:35:9:PID_raw pid_decode(uint8_t*)	16	static
-PID.h:56:9:uint8_t check_CRC_pid(PID_raw)	16	static
-PID.h:83:1:PID::PID(float, float, float, float)	32	static
-flash.h:33:6:void decode(uint8_t*, int, float*)	48	static
-flash.h:52:6:void writeFlash(uint16_t*)	32	static
-flash.h:134:11:PID_value readFlash()	48	static
-flash.h:178:17:uint32_t GetSector(uint32_t)	24	static
-flash.h:239:17:uint32_t GetSectorSize(uint32_t)	24	static
-main.cpp:134:5:int main()	216	static
-main.cpp:275:6:void SystemClock_Config()	88	static
-main.cpp:325:6:void StartDefaultTask(const void*)	48	static
-main.cpp:350:6:void StartTask03(const void*)	32	static
-main.cpp:375:6:void StartTask02(const void*)	16	static
-main.cpp:390:6:void readMagnet(const void*)	16	static
-main.cpp:409:6:void filterFunction(const void*)	32	static
-main.cpp:466:6:void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef*)	16	static
-main.cpp:481:6:void HAL_UART_RxCpltCallback(UART_HandleTypeDef*)	96	static
-main.cpp:537:1:void __static_initialization_and_destruction_0(int, int)	16	static
-main.cpp:537:1:cpp)	8	static
-main.cpp:537:1:cpp)	8	static
+flash.h:33:6:void float2Int16(float, uint16_t*)	24	static
+flash.h:44:7:float int2Float(uint16_t*)	24	static
+flash.h:58:6:void decode(uint8_t*, int, float*)	48	static
+flash.h:77:6:void writeFlash(uint16_t*)	32	static
+flash.h:154:16:IMU_calib_data readIMUcalib()	56	static
+flash.h:192:16:IMU_calib_data readImuCalibAndPid(PID_value*)	80	static
+flash.h:262:11:PID_value readFlash()	48	static
+flash.h:301:6:void writeCalibration(IMU_calib_data)	224	static
+flash.h:413:17:uint32_t GetSector(uint32_t)	24	static
+flash.h:474:17:uint32_t GetSectorSize(uint32_t)	24	static
+sbus.h:20:11:ESC_value sbus_decode(uint8_t*)	16	static
+sbus.h:29:6:bool check_CRC(ESC_value)	32	static
+sbus.h:36:6:bool CRC_thurst(ESC_value)	24	static
+sbus.h:43:6:void init_ESC()	16	static
+sbus.h:68:6:void set_ESC(ESC_value)	24	static
+MotorController.hpp:22:9:void MotorController::loadPID(PID_value)	16	static
+MotorController.hpp:28:14:ESC_value MotorController::update(EULER_angle, uint16_t)	40	static
+MotorController.hpp:72:1:MotorController::MotorController()	16	static
+main.cpp:116:6:void init_nRF24()	16	static
+main.cpp:141:5:int main()	256	static
+main.cpp:298:6:void SystemClock_Config()	88	static
+main.cpp:348:6:void StartDefaultTask(const void*)	48	static
+main.cpp:373:6:void StartTask03(const void*)	16	static
+main.cpp:401:6:void StartTask02(const void*)	16	static
+main.cpp:420:6:void readMagnet(const void*)	16	static
+main.cpp:440:6:void filterFunction(const void*)	56	static
+main.cpp:544:6:void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef*)	16	static
+main.cpp:559:6:void HAL_UART_RxCpltCallback(UART_HandleTypeDef*)	136	static
+MotorController.hpp:14:7:MotorController::~MotorController()	16	static
+main.cpp:689:1:void __static_initialization_and_destruction_0(int, int)	16	static
+main.cpp:689:1:cpp)	8	static
+main.cpp:689:1:cpp)	8	static

@@ -1,8 +1,9 @@
 RTOS_timer.h:11:13:MX_TIM7_Init	16	static
-main.h:81:13:MX_I2C1_Init	8	static
-main.h:115:13:MX_TIM1_Init	96	static
-main.h:202:13:MX_TIM4_Init	32	static
-main.h:253:13:MX_USART1_UART_Init	8	static
-main.h:286:13:MX_USART3_UART_Init	8	static
-main.h:319:13:MX_GPIO_Init	48	static
+main.h:95:13:MX_I2C1_Init	8	static
+main.h:129:13:MX_TIM1_Init	96	static
+main.h:216:13:MX_TIM4_Init	32	static
+main.h:267:13:MX_USART1_UART_Init	8	static
+main.h:300:13:MX_USART3_UART_Init	8	static
+main.h:333:13:MX_GPIO_Init	48	static
+main.h:375:13:MX_SPI1_Init	8	static
 freertos.c:63:6:vApplicationGetIdleTaskMemory	24	static

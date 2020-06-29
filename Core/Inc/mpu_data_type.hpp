@@ -35,9 +35,9 @@ double R_full[36]= {0.0001, 0, 0, 0, 0, 0,
 					0, 0, 0, 0.0001, 0, 0,
 					0, 0, 0, 0, 0.0001, 0,
 					0, 0, 0, 0, 0, 0.0001};
-double R[9]= {   7.6941e-07,0,0,
-                     0,2.0176e-07,0,
-                     0,0,1.5981e-07
+double R[9]= {   0.001,0,0,
+                 0,0.001,0,
+                 0,0,0.001
                  };
 
 #define MAX_PRECISION	(10)
@@ -144,6 +144,16 @@ char * ftoa(double f, char * buf, int precision)
 
 	return buf;
 }
+typedef struct
+{
+	float bGx;
+	float bGy;
+	float bGz;
+	float bAx;
+	float bAy;
+	float bAz;
+    float data[6];
+} IMU_calib_data;
 
 typedef struct
 {
@@ -186,6 +196,7 @@ typedef struct
 	bool magnet = true;
 	bool baro = true;
 } AHRS_con;
+
 
 float invSqrt(float x) {
 	float halfx = 0.5f * x;
